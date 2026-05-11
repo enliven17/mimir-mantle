@@ -35,7 +35,7 @@ contract Mimir {
     // ── Limits ────────────────────────────────────────────────────────────────
     uint256 public constant MAX_CHALLENGERS        = 100;
     uint256 public constant MIN_STAKE              = 2 * 10**18; // 2 MNT (18 decimals on Mantle)
-    uint256 public constant DEFAULT_PAYOUT_BPS     = 20_000;    // 2x
+    uint256 public constant DEFAULT_PAYOUT_BPS     = 20_000;    // 2x payout in fixed-odds mode
 
     // Anti-sniping: no new challenges accepted in the final N seconds before
     // a claim's deadline. Stops late-information actors from waiting to see
