@@ -2,8 +2,8 @@
  * Provider-agnostic LLM call for Mimir agents.
  *
  * Auto-selects between Google Gemini and Anthropic Claude based on which
- * API key is present in the environment. Falls back gracefully so a hackathon
- * demo only needs ONE of:
+ * API key is present in the environment. Falls back gracefully so a local
+ * dev environment only needs ONE of:
  *   - GEMINI_API_KEY     (preferred when present)
  *   - ANTHROPIC_API_KEY
  *
