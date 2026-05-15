@@ -1,3 +1,5 @@
+// Barrel export for the design-system primitives. Keep alphabetised inside
+// each section so additions stay merge-friendly.
 export { default as GlassCard } from "./GlassCard";
 export { default as Button } from "./Button";
 export { default as Badge } from "./Badge";
