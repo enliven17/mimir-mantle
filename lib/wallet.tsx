@@ -48,11 +48,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const isCorrectNetwork = !chain || chain.id === mantleChain.id;
 
-  // Auto-switch the wallet to Mantle on connect. If the chain isn't in
-  // the user's wallet, wagmi will fall back to wallet_addEthereumChain using
-  // the chain definition in lib/wagmi-config.ts. We keep a per-session "asked"
-  // flag in a ref so the user isn't pestered if they reject + re-pick another
-  // chain on purpose.
+  // Auto-switch the wallet to Mantle on connect. If the chain isn't already
+  // registered in the user's wallet, wagmi falls back to wallet_addEthereumChain
+  // using the chain definition in lib/wagmi-config.ts. We keep a per-session
+  // "asked" flag in a ref so the user isn't pestered if they reject the prompt
+  // and deliberately stay on another chain.
   const autoSwitchAttempted = useRef(false);
   useEffect(() => {
     if (!isConnected || !chain) {
