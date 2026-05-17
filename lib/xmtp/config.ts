@@ -37,7 +37,7 @@ export function isXmtpFeatureEnabled(): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
-const DEFAULT_APP_VERSION = "proven-app/0.1";
+const DEFAULT_APP_VERSION = "mimir-app/0.2";
 
 /**
  * Identificador de app para telemetría y soporte XMTP (recomendado en producción).
