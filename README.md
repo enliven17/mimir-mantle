@@ -242,8 +242,8 @@ mimir-mantle/
 │       ├── challenge-opportunities/      # curated feed
 │       ├── claim-draft/                  # LLM-assisted draft endpoint
 │       ├── claim-moderation/             # safety filter
-│       ├── cron/                         # scheduled tasks
-│       ├── network-status/               # Mantle RPC health
+│       ├── cron/                         # scheduled tasks (Vercel crons)
+│       ├── demo/                         # server-signed demo relay (demo mode)
 │       └── vs/                           # feed, detail, sync routes
 ├── agents/
 │   ├── oracle/index.ts                   # settler + Kelly auto-challenger
