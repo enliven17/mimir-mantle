@@ -192,6 +192,7 @@ function getPublicClient(): PublicClient {
     _publicClient = createPublicClient({
       chain: mantleChain,
       transport: http(getMantleRpcUrl()),
+      batch: { multicall: true },
     }) as PublicClient;
   }
   return _publicClient;
