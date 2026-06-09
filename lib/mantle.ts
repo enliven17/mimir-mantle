@@ -103,6 +103,27 @@ export function getDeployBlock(): bigint {
   return 0n;
 }
 
+// Mantle's public RPC intermittently fails eth_getLogs under load. Retry each
+// chunk with backoff so a single transient failure doesn't blank the /agents
+// and /stats event scans. A dedicated RPC (NEXT_PUBLIC_MANTLE_RPC) avoids it.
+const LOGS_RETRY_ATTEMPTS = 4;
+async function getLogsWithRetry(
+  client: PublicClient,
+  args: Parameters<PublicClient["getLogs"]>[0],
+): Promise<any[]> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= LOGS_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await client.getLogs(args as any);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === LOGS_RETRY_ATTEMPTS) break;
+      await new Promise((r) => setTimeout(r, 300 * 2 ** (attempt - 1)));
+    }
+  }
+  throw lastErr;
+}
+
 export async function paginatedGetLogs(
   client: PublicClient,
   params: Omit<Parameters<PublicClient["getLogs"]>[0], "fromBlock" | "toBlock">,
@@ -113,7 +134,7 @@ export async function paginatedGetLogs(
   const all: any[] = [];
   for (let start = fromBlock; start <= end; ) {
     const stop = start + MANTLE_LOG_CHUNK > end ? end : start + MANTLE_LOG_CHUNK;
-    const logs = await client.getLogs({ ...(params as any), fromBlock: start, toBlock: stop });
+    const logs = await getLogsWithRetry(client, { ...(params as any), fromBlock: start, toBlock: stop });
     all.push(...logs);
     start = stop + 1n;
   }
