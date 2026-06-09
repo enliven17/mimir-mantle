@@ -31,6 +31,12 @@ const MAINNET_RPC_DEFAULT = "https://rpc.mantle.xyz";
 export const MANTLE_SEPOLIA_ID = 5003;
 export const MANTLE_MAINNET_ID = 5000;
 
+// Standard Multicall3 deployment (same address on Mantle Sepolia + mainnet).
+// Enables viem's automatic read batching so the feed's hundreds of parallel
+// readContract calls collapse into a few aggregate RPC requests instead of
+// flooding the public RPC (which drops calls under burst load).
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
+
 const USE_MAINNET = process.env.NEXT_PUBLIC_MANTLE_MAINNET === "1";
 
 // ── Chain definitions ─────────────────────────────────────────────────────────
@@ -44,6 +50,9 @@ export const mantleSepolia: Chain = {
   blockExplorers: {
     default: { name: "Mantle Sepolia Explorer", url: SEPOLIA_EXPLORER },
   },
+  contracts: {
+    multicall3: { address: MULTICALL3_ADDRESS },
+  },
   testnet: true,
 };
 
@@ -56,6 +65,9 @@ export const mantleMainnet: Chain = {
   },
   blockExplorers: {
     default: { name: "Mantle Explorer", url: MAINNET_EXPLORER },
+  },
+  contracts: {
+    multicall3: { address: MULTICALL3_ADDRESS },
   },
   testnet: false,
 };
@@ -126,6 +138,7 @@ export function createMantlePublicClient(): PublicClient {
   return createPublicClient({
     chain: mantleChain,
     transport: http(getMantleRpcUrl()),
+    batch: { multicall: true },
   }) as PublicClient;
 }
 
