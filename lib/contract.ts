@@ -198,11 +198,32 @@ function getPublicClient(): PublicClient {
   return _publicClient;
 }
 
+// Mantle's public RPC is load-balanced across replicas that can lag or return
+// transient errors. Without a retry a single flaky response silently drops a
+// claim (readClaimRaw catches → null) or under-reports claimCount, leaving the
+// read-index half-built. Retry with backoff so transient RPC failures don't
+// corrupt the snapshot. Point NEXT_PUBLIC_MANTLE_RPC / MANTLE_RPC at a
+// dedicated endpoint to avoid the flakiness entirely.
+const READ_RETRY_ATTEMPTS = 4;
+async function withReadRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= READ_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === READ_RETRY_ATTEMPTS) break;
+      await new Promise((r) => setTimeout(r, 250 * 2 ** (attempt - 1)));
+    }
+  }
+  throw lastErr;
+}
+
 // ── Raw on-chain read ─────────────────────────────────────────────────────────
 export async function readClaimRaw(claimId: number): Promise<ClaimData | null> {
   const client = getPublicClient();
   try {
-    const [base, market, challengerData] = await Promise.all([
+    const [base, market, challengerData] = await withReadRetry(() => Promise.all([
       client.readContract({
         address:      CONTRACT_ADDRESS,
         abi:          MIMIR_ABI,
@@ -221,7 +242,7 @@ export async function readClaimRaw(claimId: number): Promise<ClaimData | null> {
         functionName: "getChallengerList",
         args:         [BigInt(claimId)],
       }) as Promise<[string[], bigint[]]>,
-    ]);
+    ]));
 
     const creator: string = base[0];
     if (!creator || creator === ZERO_ADDRESS) return null;
@@ -294,11 +315,11 @@ export async function getClaim(claimId: number): Promise<ClaimData | null> {
 
 export async function getClaimCount(): Promise<number> {
   const client = getPublicClient();
-  const count = await client.readContract({
+  const count = await withReadRetry(() => client.readContract({
     address:      CONTRACT_ADDRESS,
     abi:          MIMIR_ABI,
     functionName: "claimCount",
-  }) as bigint;
+  })) as bigint;
   return Number(count);
 }
 
