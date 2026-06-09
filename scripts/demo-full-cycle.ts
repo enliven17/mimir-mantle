@@ -14,7 +14,7 @@
  *      NEXT_PUBLIC_CONTRACT_ADDRESS, GEMINI_API_KEY or ANTHROPIC_API_KEY
  */
 
-import { keccak256, toBytes } from "viem";
+import { keccak256, toBytes, parseEventLogs } from "viem";
 import {
   createMantlePublicClient,
   getContractAddress,
@@ -37,7 +37,7 @@ import { MIMIR_ABI, STATE, WINNER_SIDE } from "../lib/mimir-abi";
 
 // Deadline must clear CHALLENGE_LOCK_SECONDS (60s) + room for the challenge tx
 // to land before the lock kicks in.
-const DEADLINE_SECONDS = 150;
+const DEADLINE_SECONDS = 240;
 const STAKE_MNT        = 2;
 
 const SIG_CREATE    = buildAbiFunctionSignature("createClaim",    MIMIR_ABI);
@@ -87,10 +87,20 @@ async function main(): Promise<void> {
   });
   console.log(`     create tx: ${getExplorerTxUrl(createTx)}`);
 
-  const newClaimId = (await client.readContract({
-    address: contractAddress, abi: MIMIR_ABI, functionName: "claimCount",
-  })) as bigint;
-  const claimId = Number(newClaimId);
+  // Resolve the new claim id from the ClaimCreated event in the receipt.
+  // Reading claimCount() right after the tx is unreliable on Mantle's
+  // load-balanced public RPC (a lagging replica can return a stale count,
+  // making the demo challenge the wrong claim → "Mimir: not open").
+  const createReceipt = await client.waitForTransactionReceipt({ hash: createTx });
+  const createdEvents = parseEventLogs({
+    abi: MIMIR_ABI,
+    eventName: "ClaimCreated",
+    logs: createReceipt.logs,
+  }) as Array<{ args: { id: bigint } }>;
+  if (createdEvents.length === 0) {
+    throw new Error("ClaimCreated event not found in create receipt");
+  }
+  const claimId = Number(createdEvents[0].args.id);
   console.log(`     claim id : #${claimId}`);
 
   // 2. CHALLENGE — oracle stakes on the opposite side
