@@ -150,8 +150,8 @@ export function shortenAddress(a: string, chars = 4): string {
   return `${a.slice(0, chars + 2)}...${a.slice(-chars)}`;
 }
 
-export function formatDeadline(ts: number, locale = "es"): string {
-  const loc = locale === "en" ? "en-US" : "es-AR";
+export function formatDeadline(ts: number, locale = "en"): string {
+  const loc = locale === "es" ? "es-AR" : "en-US";
   return new Date(ts * 1000).toLocaleString(loc, {
     day: "numeric",
     month: "short",
@@ -161,7 +161,7 @@ export function formatDeadline(ts: number, locale = "es"): string {
   });
 }
 
-export function getTimeRemaining(deadline: number, locale: "es" | "en" = "es") {
+export function getTimeRemaining(deadline: number, locale: "es" | "en" = "en") {
   const now = Math.floor(Date.now() / 1000);
   const t = Math.max(0, deadline - now);
   const d = Math.floor(t / 86400);
