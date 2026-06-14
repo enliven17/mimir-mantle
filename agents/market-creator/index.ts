@@ -1,10 +1,12 @@
 /**
  * Mimir Market Creator Agent — autonomous market author on Mantle.
  *
- * Pulls public market data (Bybit spot, CoinGecko, ESPN, weather), asks the
- * configured LLM to draft verifiable claim candidates, scores them, and creates
- * the highest-scoring ones on-chain. Each market costs the agent MNT from its
- * own wallet — opening a claim is itself an economic commitment.
+ * Pulls public market data (Bybit spot crypto, CoinGecko, ESPN FIFA World Cup
+ * fixtures, weather), asks the configured LLM to draft a balanced mix of
+ * verifiable claim candidates (crypto price / weather / World Cup match
+ * outcomes), scores them, and creates the highest-scoring ones on-chain. Each
+ * market costs the agent MNT from its own wallet — opening a claim is itself an
+ * economic commitment.
  *
  * Bybit is the primary price source for crypto markets — settlement uses
  * Bybit's public spot tickers as the canonical resolution URL because the
@@ -80,10 +82,10 @@ interface ClaimCandidate {
 }
 
 interface SourceBundle {
-  bybit:   string;
-  crypto:  string;
-  sports:  string;
-  weather: string;
+  bybit:    string;
+  crypto:   string;
+  worldcup: string;
+  weather:  string;
 }
 
 // ── Source fetchers ───────────────────────────────────────────────────────────
@@ -103,24 +105,40 @@ async function fetchCryptoEvents(): Promise<string> {
   }
 }
 
-async function fetchSportsEvents(): Promise<string> {
-  try {
-    // ESPN's public API for upcoming events (no key required for basic data)
-    const res = await fetch(
-      "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-      { headers: { "User-Agent": "Mimir-MarketCreator/1.0" } }
-    );
-    const data = await res.json() as any;
-    const events = (data.events ?? []).slice(0, 5);
-    if (events.length === 0) return "No current NBA events found";
-    return events.map((e: any) => {
-      const comps = e.competitions?.[0]?.competitors ?? [];
-      const teams = comps.map((c: any) => `${c.team.displayName} (${c.score ?? "?"})}`).join(" vs ");
-      return `${e.name}: ${teams} — ${e.status?.type?.description ?? "scheduled"}`;
-    }).join("\n");
-  } catch {
-    return "Sports data temporarily unavailable";
+// ESPN's public FIFA World Cup scoreboard (no key needed). We pull today + the
+// next two days and keep only UPCOMING / in-progress fixtures — a finished match
+// can't be a prediction market. Each fixture carries a DATE-PINNED resolution
+// URL (?dates=YYYYMMDD) so the oracle can still fetch that exact day's result
+// after the match ends, even once it scrolls off the default scoreboard.
+const WORLD_CUP_API = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
+
+async function fetchWorldCupEvents(): Promise<string> {
+  const lines: string[] = [];
+  for (const offset of [0, 1, 2]) {
+    try {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() + offset);
+      const ymd = d.toISOString().slice(0, 10).replace(/-/g, "");
+      const res = await fetch(`${WORLD_CUP_API}?dates=${ymd}`, {
+        headers: { "User-Agent": "Mimir-MarketCreator/1.0" },
+      });
+      const data = await res.json() as any;
+      for (const e of (data.events ?? [])) {
+        if (e.status?.type?.completed) continue; // only tradeable (not finished) fixtures
+        const cs   = e.competitions?.[0]?.competitors ?? [];
+        const home = cs.find((c: any) => c.homeAway === "home")?.team?.displayName ?? cs[0]?.team?.displayName ?? "?";
+        const away = cs.find((c: any) => c.homeAway === "away")?.team?.displayName ?? cs[1]?.team?.displayName ?? "?";
+        const status = e.status?.type?.description ?? "scheduled";
+        lines.push(
+          `${home} vs ${away} — kickoff ${e.date} — ${status} — resolutionUrl: ${WORLD_CUP_API}?dates=${ymd}`
+        );
+      }
+    } catch {
+      // skip this day on failure
+    }
   }
+  if (lines.length === 0) return "No upcoming FIFA World Cup fixtures in the next 3 days.";
+  return lines.slice(0, 10).join("\n");
 }
 
 async function fetchWeatherEvents(): Promise<string> {
@@ -147,22 +165,36 @@ ${sourceData.bybit}
 ### Crypto Markets (from CoinGecko, secondary)
 ${sourceData.crypto}
 
-### Sports Events (from ESPN)
-${sourceData.sports}
+### FIFA World Cup fixtures (from ESPN) — UPCOMING matches only
+${sourceData.worldcup}
 
 ### Weather Opportunity
 ${sourceData.weather}
 
 ## Task
-Create ${MAX_CLAIMS_PER_RUN} prediction market claim candidates. Each must be:
+Create ${MAX_CLAIMS_PER_RUN} prediction market claim candidates. Aim for a BALANCED
+MIX across exactly these three themes (roughly even split):
+  1. **Crypto price** — settled via Bybit spot tickers
+  2. **Weather** — temperature/precipitation for the named city + date
+  3. **FIFA World Cup** — outcome of a specific UPCOMING match listed above
+
+Each candidate must be:
 - **Verifiable**: resolvable from a specific public URL
 - **Binary or near-binary**: clear winner/loser outcome
 - **Time-bounded**: deadline between 2-72 hours from now (${now.toISOString()})
 - **Specific**: no vague language like "probably" or "might"
 
-Prefer Bybit as the resolution URL for crypto price claims — the API endpoint
+Crypto: prefer Bybit as the resolution URL — the API endpoint
 "https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT" returns
 the exact spot price needed for settlement.
+
+World Cup: use category "sports" and sourceType "espn". Pick a match whose status
+is NOT finished. Use the EXACT date-pinned resolutionUrl printed next to that
+fixture above (it ends in ?dates=YYYYMMDD) — do not invent a different URL. Name
+BOTH teams and the match date in the question and settlement rule, and set the
+deadline a few hours AFTER kickoff so the match is finished by then. Frame the
+two sides clearly, e.g. "Will <Team A> beat <Team B>?" with the counter covering
+draw-or-<Team B>-win.
 
 For each candidate, provide:
 {
@@ -249,15 +281,15 @@ async function run(): Promise<void> {
 
   // Fetch source data in parallel
   console.log("[market-creator] Fetching market data...");
-  const [bybit, crypto, sports, weather] = await Promise.all([
+  const [bybit, crypto, worldcup, weather] = await Promise.all([
     fetchBybitSpotSummary().catch(() => "(Bybit data unavailable)"),
     fetchCryptoEvents(),
-    fetchSportsEvents(),
+    fetchWorldCupEvents(),
     fetchWeatherEvents(),
   ]);
 
   console.log("[market-creator] Drafting claim candidates with LLM...");
-  const candidates = await draftClaimCandidates({ bybit, crypto, sports, weather });
+  const candidates = await draftClaimCandidates({ bybit, crypto, worldcup, weather });
 
   if (candidates.length === 0) {
     console.log("[market-creator] No high-quality candidates this run.");
