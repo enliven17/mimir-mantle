@@ -32,6 +32,23 @@ const DEFAULT_ANTHROPIC_MODEL = process.env.ORACLE_LLM_MODEL || "claude-sonnet-4
 
 let anthropicClient: Anthropic | null = null;
 
+// Gemini key pool. Spreads load + survives per-key rate limits (429).
+// Sources, in order: GEMINI_API_KEY (single or comma-separated) then
+// GEMINI_API_KEY_2..4. Deduped, order-preserving.
+function geminiKeys(): string[] {
+  const keys: string[] = [];
+  const primary = process.env.GEMINI_API_KEY?.trim();
+  if (primary) keys.push(...primary.split(",").map((k) => k.trim()).filter(Boolean));
+  for (const name of ["GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4"]) {
+    const v = process.env[name]?.trim();
+    if (v) keys.push(v);
+  }
+  return [...new Set(keys)];
+}
+
+// Round-robin starting offset so successive calls don't all hammer key #1.
+let _geminiKeyCursor = 0;
+
 export function activeLLMProvider(): LLMProvider {
   const forced = process.env.LLM_PROVIDER?.toLowerCase();
   if (forced === "gemini" || forced === "anthropic") return forced;
@@ -59,7 +76,10 @@ async function callGemini(
   prompt: string,
   opts: { maxTokens: number; temperature: number; jsonOnly: boolean },
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY!.trim();
+  const keys = geminiKeys();
+  if (keys.length === 0) {
+    throw new Error("No Gemini API key configured. Set GEMINI_API_KEY.");
+  }
   const model  = DEFAULT_GEMINI_MODEL;
   const url    = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -74,10 +94,14 @@ async function callGemini(
   if (opts.jsonOnly) generationConfig.responseMimeType = "application/json";
 
   const TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
-  const MAX_ATTEMPTS = 4;
+  // Give every key a couple of shots; a 429 rotates to the next key immediately
+  // (different quota bucket) instead of just backing off on the same key.
+  const MAX_ATTEMPTS = Math.max(4, keys.length * 2);
+  let keyIdx = _geminiKeyCursor % keys.length;
   let res: Response | null = null;
   let lastBody = "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const apiKey = keys[keyIdx % keys.length];
     res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -87,14 +111,25 @@ async function callGemini(
       }),
       signal: AbortSignal.timeout(60_000),
     });
-    if (res.ok) break;
+    if (res.ok) {
+      // Advance the round-robin start so the next call begins on another key.
+      _geminiKeyCursor = (keyIdx + 1) % keys.length;
+      break;
+    }
     lastBody = (await res.text()).slice(0, 500);
     if (!TRANSIENT.has(res.status) || attempt === MAX_ATTEMPTS) {
-      throw new Error(`Gemini ${res.status}: ${lastBody}`);
+      throw new Error(`Gemini ${res.status} (key ${keyIdx + 1}/${keys.length}): ${lastBody}`);
     }
-    const delayMs = 1000 * 2 ** (attempt - 1);
-    console.warn(`[llm] Gemini ${res.status} (attempt ${attempt}/${MAX_ATTEMPTS}); retrying in ${delayMs}ms`);
-    await new Promise((r) => setTimeout(r, delayMs));
+    if (res.status === 429 && keys.length > 1) {
+      const nextKey = (keyIdx + 1) % keys.length;
+      console.warn(`[llm] Gemini 429 on key ${keyIdx + 1}/${keys.length} (attempt ${attempt}); rotating to key ${nextKey + 1}`);
+      keyIdx = nextKey;
+      await new Promise((r) => setTimeout(r, 200));
+    } else {
+      const delayMs = 1000 * 2 ** (attempt - 1);
+      console.warn(`[llm] Gemini ${res.status} (attempt ${attempt}/${MAX_ATTEMPTS}); retrying in ${delayMs}ms`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
   }
 
   const json: any = await res!.json();
