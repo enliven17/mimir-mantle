@@ -34,7 +34,7 @@ export default function MessagesPageHero({
             {t("title")}
           </h1>
           <div
-            className="hidden h-px min-w-[2rem] flex-1 bg-black/[0.12] sm:block"
+            className="hidden h-px min-w-[2rem] flex-1 bg-pv-text/[0.12] sm:block"
             aria-hidden
           />
         </div>

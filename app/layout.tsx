@@ -13,9 +13,17 @@ export default function RootLayout({
 }) {
   return (
     <html
+      suppressHydrationWarning
       className={`${fontDisplay.variable} ${fontBody.variable} ${fontMono.variable}`}
     >
       <body className="overflow-x-hidden">
+        {/* Apply the saved theme before paint to avoid a flash of the wrong palette.
+            Default is light; opt into dark via the toggle (persists to localStorage). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(localStorage.getItem('mimir-theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}})();`,
+          }}
+        />
         <NextTopLoader
           color="#22D3EE"
           height={2}

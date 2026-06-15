@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
@@ -9,22 +10,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Palette tokens resolve to CSS variables so a `.dark` class on <html>
+        // flips the whole UI. Light values live in :root, dark in .dark
+        // (app/globals.css). The legacy accent names (cyan/fuch/emerald) stay
+        // so existing utility classes keep working.
         pv: {
-          // Soft blush palette
-          bg:       "#FCF8F8",
-          surface:  "#FBEFEF",
-          surface2: "#F9DFDF",
-          border:   "#F5AFAF",
-          text:     "#2A1818",
-          muted:    "#7A5050",
-          // Accents — monochromatic rose family (no green/cyan/fuch).
-          // The legacy token names (cyan/fuch/emerald) stay so existing
-          // utility classes keep working; they all resolve to rose tones now.
-          cyan:     "#D85F5F",
-          fuch:     "#C84747",
-          emerald:  "#D85F5F",
-          gold:     "#B07300",
-          danger:   "#B91C1C",
+          bg:       "rgb(var(--pv-bg) / <alpha-value>)",
+          surface:  "rgb(var(--pv-surface) / <alpha-value>)",
+          surface2: "rgb(var(--pv-surface2) / <alpha-value>)",
+          border:   "rgb(var(--pv-border) / <alpha-value>)",
+          text:     "rgb(var(--pv-text) / <alpha-value>)",
+          muted:    "rgb(var(--pv-muted) / <alpha-value>)",
+          cyan:     "rgb(var(--pv-cyan) / <alpha-value>)",
+          fuch:     "rgb(var(--pv-fuch) / <alpha-value>)",
+          emerald:  "rgb(var(--pv-emerald) / <alpha-value>)",
+          gold:     "rgb(var(--pv-gold) / <alpha-value>)",
+          danger:   "rgb(var(--pv-danger) / <alpha-value>)",
         },
       },
       fontFamily: {

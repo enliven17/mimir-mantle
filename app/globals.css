@@ -7,6 +7,41 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * Palette — :root = light (soft blush), .dark = dark (warm rose on near-black).
+ * Tailwind's pv-* tokens read these as `rgb(var(--pv-X) / <alpha>)`, so toggling
+ * the `.dark` class on <html> (ThemeToggle) repaints the whole UI.
+ * ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --pv-bg:       252 248 248;
+  --pv-surface:  251 239 239;
+  --pv-surface2: 249 223 223;
+  --pv-border:   245 175 175;
+  --pv-text:      42  24  24;
+  --pv-muted:    122  80  80;
+  --pv-cyan:     216  95  95;
+  --pv-fuch:     200  71  71;
+  --pv-emerald:  216  95  95;
+  --pv-gold:     176 115   0;
+  --pv-danger:   185  28  28;
+  color-scheme: light;
+}
+
+.dark {
+  --pv-bg:        18  12  12;
+  --pv-surface:   28  19  19;
+  --pv-surface2:  40  27  27;
+  --pv-border:    74  46  46;
+  --pv-text:     245 232 232;
+  --pv-muted:    176 136 136;
+  --pv-cyan:     232 120 120;
+  --pv-fuch:     224  96  96;
+  --pv-emerald:  232 120 120;
+  --pv-gold:     212 160  23;
+  --pv-danger:   239  68  68;
+  color-scheme: dark;
+}
+
 @layer base {
   /**
    * Evita scroll horizontal en mobile (elementos 100vw, márgenes negativos, etc.).
@@ -14,7 +49,6 @@
    */
   html {
     @apply antialiased overflow-x-hidden;
-    color-scheme: light;
   }
 
   body {
@@ -52,9 +86,23 @@
     );
   }
 
+  /* Dark mode: soften the rose vignette over the near-black backdrop. */
+  .dark body::after {
+    background: radial-gradient(
+      ellipse at 50% 50%,
+      transparent 55%,
+      rgba(120, 50, 50, 0.22) 100%
+    );
+  }
+
   ::selection {
     background: rgba(245, 175, 175, 0.45);
     color: #2A1818;
+  }
+
+  .dark ::selection {
+    background: rgba(232, 120, 120, 0.40);
+    color: #F5E8E8;
   }
 
   /**
