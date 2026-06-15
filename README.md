@@ -16,6 +16,7 @@ The agents that run Mimir are first-class economic actors. They hold MNT, place 
 - [Architecture](#architecture)
 - [The settlement lifecycle](#the-settlement-lifecycle)
 - [Agents as economic actors](#agents-as-economic-actors)
+- [The Council](#the-council)
 - [ERC-8004 agent identity](#erc-8004-agent-identity)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
@@ -47,6 +48,7 @@ There are no judges, no committees, no manual disputes. The product surfaces are
 | `/dashboard`                         | Per-wallet view — your claims, your payouts, your W/L record                       |
 | `/stats`                             | Real-time on-chain analytics: total volume, accuracy %, refund rate, agent vault   |
 | `/agents`                            | Live activity log for the oracle + market-creator with their ERC-8004 reputation   |
+| `/council`                           | The 10 AI council personas — each wallet, bankroll, and on-chain bet history        |
 | `/docs`                              | Long-form architecture + how-it-works writeup with diagrams                        |
 | `/emerging-narratives`               | Daily-curated "challenge-ready" opportunities (human-lite curation)                |
 
@@ -67,7 +69,8 @@ flowchart LR
 
     subgraph railway[Railway - Worker tier]
         OR[Oracle agent<br/>settle + auto-challenge]
-        MC[Market creator agent<br/>Bybit, CoinGecko, ESPN]
+        MC[Market creator agent<br/>crypto · weather · World Cup]
+        CO[Council<br/>10 AI personas betting MNT]
     end
 
     subgraph mantle[Mantle Sepolia]
@@ -94,6 +97,9 @@ flowchart LR
     MC -->|markets| BYBIT
     OR -->|index claims| NEON
     MC -->|index claims| NEON
+
+    CO -->|per-persona key signer| CT
+    CO -->|persona verdicts| LLM
 
     OR -.->|register identity| ID
     MC -.->|register identity| ID
@@ -183,9 +189,55 @@ stateDiagram-v2
 
 ### Market-creator agent (`agents/market-creator/index.ts`)
 
-Runs every 6 hours. Fetches public data feeds (Bybit V5 spot tickers, CoinGecko, ESPN, OpenWeather), asks the LLM to draft 1–5 verifiable claim candidates, scores each candidate for quality, and creates the highest-scoring ones on-chain — staking the creator side from its own balance. This means **opening a claim is itself an economic commitment from an AI agent**, not a free tweet.
+Runs every 6 hours. Fetches public data feeds (Bybit V5 spot tickers, CoinGecko, ESPN FIFA World Cup fixtures, open-meteo) and asks the LLM to draft a balanced mix of verifiable claim candidates across three themes — **crypto price**, **weather**, and **World Cup match outcomes** — scores each for quality, and creates the highest-scoring ones on-chain, staking the creator side from its own balance. This means **opening a claim is itself an economic commitment from an AI agent**, not a free tweet.
 
 The agent treats curation as the scarce resource. The default cap is 5 markets per run with a quality floor of 70/100, so the surface stays sparse and challenge-ready rather than noisy. Bybit is the primary settlement source for price-prediction markets because its public V5 spot ticker endpoint returns a single deterministic price the oracle can re-fetch and hash.
+
+---
+
+## The Council
+
+Beyond the oracle and market-creator, Mimir runs a **Council of 10 AI personas** (`agents/council/index.ts`) — each an autonomous economic actor with **its own local EVM wallet** that stakes native MNT on the challenger side of claims it disagrees with. Every persona reads the same claims and the same evidence but reaches different verdicts based on character.
+
+```mermaid
+flowchart TB
+    subgraph council[Council worker — every 3 min]
+        POLL[Poll open/active claims<br/>deadline-prioritized]
+        EV[Shared per-cycle<br/>evidence cache]
+        POLL --> EV
+    end
+
+    EV --> LLMP[LLM personas<br/>optimist · pessimist · statistician<br/>crypto-maxi · sports-pundit · weatherman<br/>doomer · yapper]
+    EV --> RULE[Rule personas<br/>contrarian · whale-watcher<br/>no LLM]
+
+    LLMP -->|persona prompt bias + Kelly sizing| DEC{CHALLENGERS_WIN<br/>above confidence?}
+    RULE -->|pool imbalance / whale follow| DEC
+    DEC -->|yes| STAKE[challengeClaim<br/>persona's own key · MNT]
+    DEC -->|no| SKIP[abstain]
+    STAKE --> CHAIN[Mimir.sol on Mantle]
+```
+
+The roster mixes four archetypes:
+
+| Archetype       | Personas                                                      | How they decide                                              |
+| --------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
+| **LLM-biased**  | 🌞 Optimist, 🌧️ Pessimist, 📊 Statistician, 💀 Doomer          | LLM verdict with a personality prompt prefix + Kelly sizing  |
+| **Specialist**  | ₿ Crypto Maximalist, 🏈 Sports Pundit, 🌤️ Weatherman           | Only bet claims in their category (crypto / sports / weather) |
+| **Rule-based**  | 🔁 Contrarian, 🐋 Whale-Watcher                                | Pure pool-state logic — no LLM call                          |
+| **Micro**       | 🗣️ Yapper                                                      | Stakes small but often, low confidence threshold             |
+
+- Personas can only **join the challenger side** (`createClaim` is the market-creator's role); when a persona agrees with the creator, it abstains.
+- LLM personas size stakes with the [Kelly criterion](https://en.wikipedia.org/wiki/Kelly_criterion) capped at 15% of bankroll. The contract's `MIN_STAKE` (2 MNT) is the floor.
+- The worker shares **one evidence fetch per claim per cycle** across all personas, and throttles LLM calls to stay under rate limits. Give the council its own quota with `COUNCIL_GEMINI_API_KEY` (comma-separated for multi-key rotation).
+- Every stake is a real on-chain `ClaimChallenged` event. The `/council` page renders each persona's wallet, bankroll, and bet history; `/vs/[id]` shows where the council stands on a single claim.
+
+Provision + fund the wallets:
+
+```bash
+npm run council:wallets        # generate 10 local persona keys into .env.local
+npm run council:fund           # distribute MNT from the market-creator to each persona
+npm run council                # run the council (or via npm run workers)
+```
 
 ---
 
@@ -218,7 +270,7 @@ The result is a stack where any third party can answer "*which AI agents have a 
 | Database           | Neon Postgres via `@neondatabase/serverless`                                      | Serverless-friendly driver, works on both Vercel functions and Railway long-running workers                      |
 | i18n               | next-intl (English)                                                               | Locale-prefixed routing, runtime message loading                                                                  |
 | Frontend hosting   | Vercel                                                                            | Native Next.js, 30s function timeout for /api routes                                                              |
-| Worker hosting     | Railway                                                                           | Long-lived processes; `npm run workers` runs the oracle + market-creator concurrently with auto-restart           |
+| Worker hosting     | Railway                                                                           | Long-lived processes; `npm run workers` runs the oracle + market-creator + council concurrently with auto-restart |
 
 ---
 
@@ -234,6 +286,7 @@ mimir-mantle/
 │   │   ├── stats/page.tsx                # on-chain analytics
 │   │   ├── vs/                           # claim detail + create flows
 │   │   ├── agents/                       # oracle + market-creator activity + ERC-8004 reputation
+│   │   ├── council/                      # 10 AI persona wallets, bankrolls + bet history
 │   │   ├── messages/                     # XMTP inbox
 │   │   ├── docs/                         # long-form architecture writeup
 │   │   ├── layout.tsx                    # i18n root layout
@@ -247,7 +300,9 @@ mimir-mantle/
 │       └── vs/                           # feed, detail, sync routes
 ├── agents/
 │   ├── oracle/index.ts                   # settler + Kelly auto-challenger
-│   └── market-creator/index.ts           # autonomous market author (Bybit, CoinGecko, ESPN)
+│   ├── market-creator/index.ts           # autonomous market author (crypto, weather, World Cup)
+│   ├── council/                          # 10 AI personas that bet MNT (personas + shared runner)
+│   └── indexer/index.ts                  # keeps the Neon read-index + opportunities warm
 ├── contracts/
 │   └── Mimir.sol                         # the only contract; deployed on Mantle
 ├── lib/
@@ -268,6 +323,8 @@ mimir-mantle/
 │   ├── compile.ts                        # solc 0.8.28 → artifacts/Mimir.bin + .abi.json
 │   ├── deploy.ts                         # deploy Mimir.sol to Mantle (Sepolia by default)
 │   ├── generate-agent-wallets.ts         # mint fresh oracle + market-creator keys
+│   ├── generate-council-wallets.ts       # mint the 10 council persona keys
+│   ├── fund-council.ts                   # distribute MNT to the council wallets
 │   ├── register-agents.ts                # ERC-8004 mint + Mimir.registerAgent mirror
 │   ├── check-agent-balances.ts           # read on-chain MNT balances
 │   ├── check-claim.ts                    # inspect any claim
@@ -469,7 +526,10 @@ Every variable is documented inline in `.env.example`. The non-obvious ones:
 | `npm run oracle`                     | Run the oracle settler                                               |
 | `npm run oracle:challenge`           | Same as `oracle` but with `AUTO_CHALLENGE=1`                         |
 | `npm run market-creator`             | Run the market-creator agent                                         |
-| `npm run workers`                    | Run both agents concurrently                                         |
+| `npm run council`                    | Run the 10-persona council                                          |
+| `npm run council:wallets`            | Generate the 10 council persona keys                                |
+| `npm run council:fund`               | Distribute MNT from the market-creator to each persona              |
+| `npm run workers`                    | Run oracle + market-creator + council concurrently                  |
 | `npm run demo`                       | Full create → challenge → settle in ~3 minutes                       |
 | `npm run seed`                       | Bulk-seed demo markets                                               |
 | `npm run test:smoke`                 | Node-native smoke tests                                              |
