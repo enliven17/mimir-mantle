@@ -10,7 +10,9 @@ import {
 } from "@/lib/mantle";
 import { MIMIR_ABI } from "@/lib/mimir-abi";
 
-export const revalidate = 30;
+// Scans event logs from the deploy block — too heavy for build-time static
+// export (times out on the public RPC). Render on demand instead.
+export const dynamic = "force-dynamic";
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
