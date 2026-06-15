@@ -13,7 +13,17 @@ interface PlasmaProps {
   scale?: number;
   opacity?: number;
   mouseInteractive?: boolean;
+  /** 4 gradient stops (lightest bg → accent). Defaults to the light blush ramp. */
+  pal?: [string, string, string, string];
 }
+
+// Light blush ramp (matches the page's light pv tokens).
+const DEFAULT_PAL: [string, string, string, string] = [
+  "#FCF8F8",
+  "#FBEFEF",
+  "#F9DFDF",
+  "#F5AFAF",
+];
 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -48,6 +58,10 @@ uniform float uScale;
 uniform float uOpacity;
 uniform vec2 uMouse;
 uniform float uMouseInteractive;
+uniform vec3 uPal0;
+uniform vec3 uPal1;
+uniform vec3 uPal2;
+uniform vec3 uPal3;
 out vec4 fragColor;
 
 void mainImage(out vec4 o, vec2 C) {
@@ -84,22 +98,17 @@ vec3 sanitize(vec3 c){
   );
 }
 
-// 4-stop blush palette (matches the page's pv tokens).
-// Index 0 = page bg (lightest), index 3 = accent (deepest tint).
-const vec3 PAL0 = vec3(0.988, 0.973, 0.973); // #FCF8F8
-const vec3 PAL1 = vec3(0.984, 0.937, 0.937); // #FBEFEF
-const vec3 PAL2 = vec3(0.976, 0.875, 0.875); // #F9DFDF
-const vec3 PAL3 = vec3(0.961, 0.686, 0.686); // #F5AFAF
-
+// 4-stop palette supplied via uniforms (uPal0 = lightest/bg, uPal3 = accent).
+// Light theme: blush ramp. Dark theme: near-black → rose (keeps the page dark).
 vec3 palette(float t) {
   t = clamp(t, 0.0, 1.0);
   // 3 segments across 4 stops.
   if (t < 0.3333) {
-    return mix(PAL0, PAL1, t / 0.3333);
+    return mix(uPal0, uPal1, t / 0.3333);
   } else if (t < 0.6667) {
-    return mix(PAL1, PAL2, (t - 0.3333) / 0.3333);
+    return mix(uPal1, uPal2, (t - 0.3333) / 0.3333);
   }
-  return mix(PAL2, PAL3, (t - 0.6667) / 0.3333);
+  return mix(uPal2, uPal3, (t - 0.6667) / 0.3333);
 }
 
 void main() {
@@ -125,6 +134,7 @@ export default function Plasma({
   scale = 1,
   opacity = 1,
   mouseInteractive = false,
+  pal = DEFAULT_PAL,
 }: PlasmaProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mousePos = useRef({ x: 0, y: 0 });
@@ -136,6 +146,7 @@ export default function Plasma({
     const useCustomColor = color ? 1.0 : 0.0;
     const customColorRgb = color ? hexToRgb(color) : [1, 1, 1];
     const directionMultiplier = direction === "reverse" ? -1.0 : 1.0;
+    const palRgb = pal.map((h) => new Float32Array(hexToRgb(h)));
 
     let renderer: Renderer;
     try {
@@ -171,6 +182,10 @@ export default function Plasma({
         uDirection:       { value: directionMultiplier },
         uScale:           { value: scale },
         uOpacity:         { value: opacity },
+        uPal0:            { value: palRgb[0] },
+        uPal1:            { value: palRgb[1] },
+        uPal2:            { value: palRgb[2] },
+        uPal3:            { value: palRgb[3] },
         uMouse:           { value: new Float32Array([0, 0]) },
         uMouseInteractive:{ value: mouseInteractive ? 1.0 : 0.0 },
       },
@@ -276,7 +291,7 @@ export default function Plasma({
         /* container already torn down */
       }
     };
-  }, [color, speed, direction, scale, opacity, mouseInteractive]);
+  }, [color, speed, direction, scale, opacity, mouseInteractive, pal.join(",")]);
 
   return <div ref={containerRef} className="plasma-container" />;
 }

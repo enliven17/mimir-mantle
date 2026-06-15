@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import Plasma from "@/components/Plasma";
+import PlasmaBackdrop from "@/components/PlasmaBackdrop";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
@@ -272,7 +272,7 @@ export default function HomePage() {
         <section className="relative mb-6 w-full sm:mb-8">
           {/* Plasma WebGL backdrop — full-viewport-bleed, escapes both <main> and the hero box */}
           <div className="absolute inset-y-0 left-1/2 z-0 h-full w-screen -translate-x-1/2 overflow-hidden">
-            <Plasma color="#F5AFAF" speed={0.9} scale={1} opacity={0.85} mouseInteractive={false} />
+            <PlasmaBackdrop />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-pv-bg via-pv-bg/35 to-transparent sm:h-32" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-pv-bg via-pv-bg/60 to-transparent sm:h-40" />
           </div>
