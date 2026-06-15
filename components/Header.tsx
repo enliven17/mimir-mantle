@@ -141,7 +141,6 @@ export default function Header() {
   const t = useTranslations("header");
   const tc = useTranslations("common");
 
-  const isPresentationHome = pathname === "/";
   const xmtpNavEnabled = useMemo(() => isXmtpFeatureEnabled(), []);
 
   const NAV_ITEMS = useMemo(() => {
@@ -215,24 +214,7 @@ export default function Header() {
           </span>
         </Link>
 
-        {isPresentationHome ? (
-          <div className="flex items-center gap-4 sm:gap-5">
-            <Link
-              href="/docs"
-              className="font-mono text-[12px] font-medium text-pv-text/75 transition-colors hover:text-pv-emerald focus-ring sm:text-[13px]"
-            >
-              Docs <span className="text-pv-emerald">&lt;/&gt;</span>
-            </Link>
-            <Link
-              href="/explorer"
-              className="btn-compact-primary px-4 py-1.5 text-[12px] focus-ring sm:text-[13px]"
-            >
-              {t("launchApp")}
-            </Link>
-          </div>
-        ) : (
-          <>
-            {/* Desktop nav */}
+        {/* Desktop nav */}
             <div className="hidden items-center gap-2 md:flex lg:gap-3">
               {NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href;
@@ -308,13 +290,11 @@ export default function Header() {
                 {mobileOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
             </div>
-          </>
-        )}
       </div>
 
       {/* Mobile sheet */}
       <AnimatePresence>
-        {!isPresentationHome && mobileOpen && (
+        {mobileOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
