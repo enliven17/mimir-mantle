@@ -63,13 +63,13 @@ import type {
   EvidenceCacheEntry,
 } from "./shared/types";
 
-const POLL_INTERVAL_MS = Number(process.env.COUNCIL_POLL_INTERVAL_MS ?? 180_000);
+const POLL_INTERVAL_MS = Number(process.env.COUNCIL_POLL_INTERVAL_MS ?? 300_000);
 /**
  * Per-cycle work cap to stay under LLM free-tier rate limits.
  * Claims are sorted by deadline-proximity so the council focuses on
  * the markets closest to settling.
  */
-const MAX_CLAIMS_PER_CYCLE = Number(process.env.COUNCIL_MAX_CLAIMS ?? 12);
+const MAX_CLAIMS_PER_CYCLE = Number(process.env.COUNCIL_MAX_CLAIMS ?? 6);
 const CONTRACT_ADDRESS     = getContractAddress();
 const publicClient         = createMantlePublicClient();
 

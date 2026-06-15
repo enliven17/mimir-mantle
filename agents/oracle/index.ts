@@ -45,8 +45,22 @@ import {
   type EvidenceFetcherKind,
 } from "../../lib/server/evidence-fetcher";
 
+// Worker-scoped Gemini key — its own Google-project quota, isolated from the
+// creator + council so they don't share one free-tier 20 req/min bucket.
+// Falls back to GEMINI_API_KEY. Comma-separated for multi-key rotation.
+{
+  const k = process.env.ORACLE_GEMINI_API_KEY?.trim();
+  if (k) {
+    process.env.GEMINI_API_KEY = k;
+    delete process.env.GEMINI_API_KEY_2;
+    delete process.env.GEMINI_API_KEY_3;
+    delete process.env.GEMINI_API_KEY_4;
+  }
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
-const POLL_INTERVAL_MS      = 60_000;
+const POLL_INTERVAL_MS      = Number(process.env.ORACLE_POLL_INTERVAL_MS ?? 180_000);
+const LLM_THROTTLE_MS       = Number(process.env.ORACLE_LLM_THROTTLE_MS ?? 3500);
 const MAX_CONTENT_CHARS     = 8_000;
 const CONTRACT_ADDRESS      = getContractAddress();
 const AUTO_CHALLENGE        = process.env.AUTO_CHALLENGE === "1";
@@ -176,6 +190,17 @@ async function fetchEvidence(url: string): Promise<EvidenceResult> {
   }
 }
 
+// Serialize + space out LLM calls so a poll that evaluates many claims doesn't
+// burst past the free-tier rate limit. Overridable via ORACLE_LLM_THROTTLE_MS.
+let lastLlmCallAt = 0;
+async function throttleLlm(): Promise<void> {
+  const since = Date.now() - lastLlmCallAt;
+  if (since < LLM_THROTTLE_MS) {
+    await new Promise((r) => setTimeout(r, LLM_THROTTLE_MS - since));
+  }
+  lastLlmCallAt = Date.now();
+}
+
 // ── LLM evaluation ────────────────────────────────────────────────────────────
 async function evaluateClaim(claim: ClaimOnChain, evidence: string): Promise<OracleVerdict> {
   const deadlineDate = new Date(Number(claim.deadline) * 1000).toISOString();
@@ -217,6 +242,7 @@ Return JSON only:
 - UNRESOLVABLE only if the fetched evidence is missing, ambiguous, or doesn't contain the data needed.
 - Be strict about confidence — only go above 80 when evidence is unambiguous.`;
 
+  await throttleLlm();
   const text = await callLLM(prompt, { maxTokens: 512, jsonOnly: true });
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);

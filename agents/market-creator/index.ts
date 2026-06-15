@@ -42,6 +42,18 @@ import {
 import { MIMIR_ABI } from "../../lib/mimir-abi";
 import { fetchBybitSpotSummary } from "../../lib/sources/bybit";
 
+// Worker-scoped Gemini key — its own Google-project quota, isolated from the
+// oracle + council. Falls back to GEMINI_API_KEY. Comma-separated for rotation.
+{
+  const k = process.env.MARKET_CREATOR_GEMINI_API_KEY?.trim();
+  if (k) {
+    process.env.GEMINI_API_KEY = k;
+    delete process.env.GEMINI_API_KEY_2;
+    delete process.env.GEMINI_API_KEY_3;
+    delete process.env.GEMINI_API_KEY_4;
+  }
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const CONTRACT_ADDRESS    = getContractAddress();
 const CREATOR_STAKE_MNT   = Number(process.env.CREATOR_STAKE_MNT ?? "2");
