@@ -51,7 +51,7 @@ function ArchitectureDiagram() {
       <g>
         <rect x="210" y="200" width="220" height="120" rx="16" fill={C.surface} stroke={C.border} strokeWidth="1.5" />
         <text x="320" y="228" textAnchor="middle" fontSize="11" fontWeight="700" fill={C.muted} letterSpacing="2">RAILWAY · WORKERS</text>
-        <text x="320" y="256" textAnchor="middle" fontSize="14" fontWeight="700" fill={C.text}>oracle + market-creator</text>
+        <text x="320" y="256" textAnchor="middle" fontSize="14" fontWeight="700" fill={C.text}>oracle · creator · council</text>
         <text x="320" y="278" textAnchor="middle" fontSize="11" fill={C.muted}>poll, evaluate, settle</text>
         <text x="320" y="298" textAnchor="middle" fontSize="11" fill={C.muted}>local key signer (viem)</text>
       </g>
@@ -305,7 +305,7 @@ export default function DocsPage() {
           <TocLink href="#why-mantle" label="2. Why MNT on Mantle" />
           <TocLink href="#architecture" label="3. Architecture" />
           <TocLink href="#lifecycle" label="4. The claim lifecycle" />
-          <TocLink href="#agents" label="5. The agents" />
+          <TocLink href="#agents" label="5. The agents & council" />
           <TocLink href="#identity" label="6. ERC-8004 agent identity" />
           <TocLink href="#contract" label="7. Smart contract terms" />
           <TocLink href="#play" label="8. How to play" />
@@ -438,7 +438,8 @@ export default function DocsPage() {
 
       <Section id="agents" eyebrow="05" title="The agents">
         <p>
-          Two background processes run continuously. Each owns a local EVM private
+          A set of background workers run continuously — the oracle, the
+          market-creator, and a 10-persona council. Each owns a local EVM private
           key and signs transactions directly through viem — no KMS, no custodial
           dependency.
         </p>
@@ -457,13 +458,50 @@ export default function DocsPage() {
             bankroll.
           </Card>
           <Card title="Market-creator agent">
-            Polls trusted public sources every six hours — primarily Bybit V5 spot
-            tickers for crypto, plus CoinGecko, ESPN, and OpenWeather as secondary
-            feeds. It asks the LLM to draft 1&ndash;5 verifiable claim candidates,
-            scores each for quality, and creates the highest-scoring ones on chain
-            with its own creator-side stake. Opening a claim is an economic
-            commitment, not a free tweet.
+            Polls trusted public sources every six hours — Bybit V5 spot tickers
+            for crypto, open-meteo for weather, and ESPN FIFA World Cup fixtures —
+            and asks the LLM to draft a balanced mix of verifiable claims across
+            crypto price, weather, and World Cup match outcomes. It scores each for
+            quality and creates the best ones with its own creator-side stake.
+            Opening a claim is an economic commitment, not a free tweet.
           </Card>
+        </div>
+
+        <div className="space-y-4 pt-2">
+          <h3 className="font-bold tracking-tight text-pv-text">
+            The Council — 10 AI personas that bet
+          </h3>
+          <p>
+            Beyond the oracle and market-creator, a council of ten AI personas each
+            holds its own wallet and stakes native MNT on the challenger side of
+            claims it disagrees with. Every persona reads the same claims and the
+            same evidence but reaches different verdicts based on character — and
+            can only join the challenger pool, abstaining when it agrees with the
+            creator. LLM personas size stakes with the Kelly criterion (floored at
+            the 2&nbsp;MNT minimum); rule personas react to pool state with no LLM
+            call at all. Each stake is a real{" "}
+            <code className="rounded bg-pv-surface2 px-1.5 py-0.5 text-xs">ClaimChallenged</code>{" "}
+            event, surfaced on the <code className="rounded bg-pv-surface2 px-1.5 py-0.5 text-xs">/council</code> page.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card title="LLM-biased · 🌞 🌧️ 📊 💀">
+              Optimist, Pessimist, Statistician, Doomer — each runs the same
+              evidence through an LLM with a personality prompt prefix, then stakes
+              when confident the challenger side wins.
+            </Card>
+            <Card title="Specialist · ₿ 🏈 🌤️">
+              Crypto Maximalist, Sports Pundit, Weatherman — only touch claims in
+              their category (crypto / sports / weather) and skip everything else.
+            </Card>
+            <Card title="Rule-based · 🔁 🐋">
+              Contrarian bets against a lopsided pool; Whale-Watcher copies the
+              largest individual staker. Pure on-chain logic, no LLM call.
+            </Card>
+            <Card title="Micro · 🗣️">
+              The Yapper stakes small but often with a low confidence threshold,
+              keeping the market lively.
+            </Card>
+          </div>
         </div>
       </Section>
 
